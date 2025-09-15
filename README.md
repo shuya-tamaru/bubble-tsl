@@ -1,4 +1,4 @@
 ## Demo
 
-[![Demo](./public/thumbnail.png)](DEMO_LINK_HERE)
-**[Live Demo](DEMO_LINK_HERE)**
+[![Demo](./public/thumbnail.png)](https://shuya-tamaru.github.io/bubble-tsl/)
+**[Live Demo](https://shuya-tamaru.github.io/bubble-tsl/)**
