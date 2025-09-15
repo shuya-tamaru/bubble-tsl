@@ -43,8 +43,34 @@
       content="Three.js, WebGPU, TSL, Bubble,  JavaScript, TypeScript"
     />
     <meta name="author" content="Shuya Tamaru" />
+    <style>
+      #spinner {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        width: 50px;
+        height: 50px;
+        margin: -25px 0 0 -25px; /* 中央寄せ */
+        border: 6px solid rgba(255, 255, 255, 0.3); /* 薄い色の円 */
+        background: "#000"; /* 背景は透明 */
+        border-top: 6px solid #fff; /* 上だけ白にして動きを出す */
+        border-radius: 50%; /* 丸くする */
+        animation: spin 1s linear infinite;
+        z-index: 9999;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
   </head>
   <body>
+    <div id="spinner"></div>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
