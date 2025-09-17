@@ -1,6 +1,5 @@
 import * as THREE from "three/webgpu";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import {
   abs,
   float,
@@ -19,7 +18,7 @@ import {
   mod,
   dot,
   texture,
-  clamp,
+  positionWorld,
 } from "three/tsl";
 import GUI from "lil-gui";
 export function bootstrap(environmentMap: THREE.Texture) {
@@ -46,7 +45,6 @@ export function bootstrap(environmentMap: THREE.Texture) {
   document.body.appendChild(renderer.domElement);
 
   // environment
-  environmentMap.mapping = THREE.EquirectangularReflectionMapping;
 
   scene.background = environmentMap;
   scene.environment = environmentMap;
@@ -57,21 +55,17 @@ export function bootstrap(environmentMap: THREE.Texture) {
   controls.minDistance = 0.1;
   controls.maxDistance = 50;
 
-  let geometry = new THREE.IcosahedronGeometry(2.5, 50) as THREE.BufferGeometry;
-  geometry = mergeVertices(geometry);
-  geometry.computeTangents();
+  const geometry = new THREE.IcosahedronGeometry(
+    2.5,
+    50
+  ) as THREE.BufferGeometry;
+
   const material = new THREE.MeshPhysicalNodeMaterial({
     transparent: true,
     side: THREE.DoubleSide,
-    envMapIntensity: 3,
-    metalness: 0.9,
+    metalness: 1.0,
     roughness: 0.0,
-    ior: 1.5,
-    thickness: 1.5,
   });
-
-  const ambientLight = new THREE.AmbientLight(0xffffff, 3.5);
-  scene.add(ambientLight);
 
   //params
   const uNoiseTexture = new THREE.TextureLoader().load("./noiseTexture.png");
@@ -153,101 +147,105 @@ export function bootstrap(environmentMap: THREE.Texture) {
     //@ts-ignore
     const displacement = getDisplacementEffect(getDisplacement(positionLocal));
     positionLocal.addAssign(normalLocal.mul(displacement));
-
     return positionLocal;
   })();
 
   //@ts-ignore
   const wavelengthToRGB = Fn(([wavelength]) => {
+    const w380 = float(380.0);
+    const w420 = float(420.0);
+    const w440 = float(440.0);
+    const w490 = float(490.0);
+    const w510 = float(510.0);
+    const w580 = float(580.0);
+    const w645 = float(645.0);
+    const w700 = float(700.0);
+    const w780 = float(780.0);
+
     const color = vec3(0.0).toVar();
-    const factor = float(0.1).toVar();
+    const factor = float(1.0).toVar();
 
     //@ts-ignore
-    If(
-      wavelength.greaterThanEqual(380.0).and(wavelength.lessThan(440.0)),
-      () => {
-        //@ts-ignore
-        color.assign(
-          vec3(float(440).sub(wavelength).div(float(440).sub(380)), 0.0, 1.0)
-        );
-      }
-    )
+    //(value - min)/ (max - min)
+    // 0 ~ 1 : min ~ max
+    const lerp = Fn(([value, min, max]) => {
+      return value.sub(min).div(max.sub(min));
+    });
+
+    //@ts-ignore
+    //(max - value)/ (max - min)
+    // 1 ~ 0 : min ~ max
+    const invLerp = Fn(([value, min, max]) => {
+      return max.sub(value).div(max.sub(min));
+    });
+
+    If(wavelength.greaterThanEqual(w380).and(wavelength.lessThan(w440)), () => {
+      //purple to blue
+      //(440 - wavelength)/ (440 - 380)
+      //@ts-ignore
+      color.assign(vec3(invLerp(wavelength, w380, w440), 0.0, 1.0));
+    })
       .ElseIf(
-        wavelength.greaterThanEqual(440.0).and(wavelength.lessThan(490.0)),
+        wavelength.greaterThanEqual(w440).and(wavelength.lessThan(w490)),
         () => {
-          color.assign(
-            vec3(0.0, wavelength.sub(440).div(float(490.0).sub(440.0)), 1.0)
-          );
+          //blue to sky blue
+          //(wavelength - 490)/ (490 - 440)
+          //@ts-ignore
+          color.assign(vec3(0.0, lerp(wavelength, w440, w490), 1.0));
         }
       )
       .ElseIf(
-        wavelength.greaterThanEqual(490.0).and(wavelength.lessThan(510.0)),
+        wavelength.greaterThanEqual(w490).and(wavelength.lessThan(w510)),
         () => {
-          color.assign(
-            vec3(
-              0.0,
-              1.0,
-              float(510.0).sub(wavelength).div(float(510.0).sub(490.0))
-            )
-          );
+          //sky blue to green
+          //(510 - wavelength)/ (510 - 490)
+          //@ts-ignore
+          color.assign(vec3(0.0, 1.0, invLerp(wavelength, w490, w510)));
         }
       )
       .ElseIf(
-        wavelength.greaterThanEqual(510.0).and(wavelength.lessThan(580.0)),
+        wavelength.greaterThanEqual(w510).and(wavelength.lessThan(w580)),
         () => {
-          color.assign(
-            vec3(wavelength.sub(510).div(float(580.0).sub(510.0)), 1.0, 0.0)
-          );
+          //green to yellow
+          //(wavelength - 580)/ (580 - 510)
+          //@ts-ignore
+          color.assign(vec3(lerp(wavelength, w510, w580), 1.0, 0.0));
         }
       )
       .ElseIf(
-        wavelength.greaterThanEqual(580.0).and(wavelength.lessThan(645.0)),
+        wavelength.greaterThanEqual(w580).and(wavelength.lessThan(w645)),
         () => {
-          color.assign(
-            vec3(
-              1.0,
-              float(645.0).sub(wavelength).div(float(645.0).sub(580.0)),
-              0.0
-            )
-          );
+          //yellow to red
+          //(645 - wavelength)/ (645 - 580)
+          //@ts-ignore
+          color.assign(vec3(1.0, invLerp(wavelength, w580, w645), 0.0));
         }
       )
       .ElseIf(
-        wavelength.greaterThanEqual(645.0).and(wavelength.lessThanEqual(780.0)),
+        wavelength.greaterThanEqual(w645).and(wavelength.lessThanEqual(w780)),
         () => {
+          //red
+          //@ts-ignore
           color.assign(vec3(1.0, 0.0, 0.0));
         }
       )
       .Else(() => {
-        color.assign(vec3(0.0, 0.0, 0.0));
+        color.assign(vec3(0.0));
       });
 
-    // factor adjustment
-    If(
-      wavelength.greaterThanEqual(380.0).and(wavelength.lessThan(420.0)),
-      () => {
-        factor.assign(
-          float(0.1).add(
-            float(0.9).mul(wavelength.sub(380.0)).div(float(420.0).sub(380.0))
-          )
-        );
-      }
-    )
+    If(wavelength.greaterThanEqual(w380).and(wavelength.lessThan(w420)), () => {
+      factor.assign(
+        //@ts-ignore
+        float(0.1).add(float(0.9).mul(lerp(wavelength, w380, w420)))
+      );
+    })
+      //@ts-ignore
       .ElseIf(
-        wavelength.greaterThanEqual(420.0).and(wavelength.lessThanEqual(700.0)),
-        () => {
-          factor.assign(1.0);
-        }
-      )
-      .ElseIf(
-        wavelength.greaterThan(700.0).and(wavelength.lessThanEqual(780.0)),
+        wavelength.greaterThan(w700).and(wavelength.lessThanEqual(w780)),
         () => {
           factor.assign(
-            float(0.1).add(
-              float(0.9)
-                .mul(float(700.0).sub(wavelength))
-                .div(float(780.0).sub(float(700.0)))
-            )
+            //@ts-ignore
+            float(0.1).add(float(0.9).mul(invLerp(wavelength, w700, w780)))
           );
         }
       );
@@ -261,31 +259,26 @@ export function bootstrap(environmentMap: THREE.Texture) {
   });
 
   material.colorNode = Fn(() => {
-    const viewDirection = uCameraPosition.sub(positionLocal).normalize();
+    const viewDirection = uCameraPosition.sub(positionWorld).normalize();
     const dotProduct = dot(normalLocal, viewDirection);
     const wavelength = mix(
       uMinWavelength,
       uMaxWavelength,
       abs(dotProduct)
     ).toVar();
+    //@ts-ignore
+    const waveColor = wavelengthToRGB(wavelength);
+    const whiteColor = vec3(1.0);
+
     const baseColor = mix(
-      vec3(1.0),
-      //@ts-ignore
-      wavelengthToRGB(clamp(wavelength, uMinWavelength, uMaxWavelength)),
+      whiteColor,
+      waveColor,
       float(1.0).sub(abs(dotProduct))
     );
     const repeatUv = fract(uv().mul(uNoiseStrength));
     const noiseValue = texture(uNoiseTexture, repeatUv).r;
 
-    wavelength.assign(wavelength.add(noiseValue));
-    baseColor.assign(
-      mix(
-        baseColor,
-        //@ts-ignore
-        wavelengthToRGB(clamp(wavelength, uMinWavelength, uMaxWavelength)),
-        noiseValue
-      )
-    );
+    baseColor.assign(mix(baseColor, waveColor, noiseValue));
     //@ts-ignore
     baseColor.assign(applyGammaCorrection(baseColor, 2.2));
 
@@ -319,9 +312,7 @@ export function bootstrap(environmentMap: THREE.Texture) {
     .add(subdivisions, "value", 0, 50, 1)
     .name("Subdivisions")
     .onChange(() => {
-      geometry = new THREE.IcosahedronGeometry(2.5, subdivisions.value);
-      geometry = mergeVertices(geometry);
-      geometry.computeTangents();
+      const geometry = new THREE.IcosahedronGeometry(2.5, subdivisions.value);
       mesh.geometry = geometry;
     });
 
